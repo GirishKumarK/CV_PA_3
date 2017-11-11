@@ -1,8 +1,8 @@
-# CV_PA_3
+# Computer Vision ~ Programming Assignment ~ 3
 
 # STOP HERE ~ READ ME FIRST ~ INCOMPLETE
 
-Will keep the page updated.
+Files will be uploaded and will be kept updated as soon as possible.
 
 
 Computer Vision ~ Programming Assignment ~ 1 : https://github.com/GirishKumarK/CV_PA_1
