@@ -4,6 +4,8 @@
 
 Files will be uploaded and will be kept updated as soon as possible.
 
+Program Requirements : Python 3.5, NumPy, Pandas, SciKit-Learn, SciKit-Image, SciKit-Video, MatPlotLib and TensorFlow
+
 Just Execute Main_CV_PA3.py in Spyder/Anaconda ~ Not In Terminal/CommandPrompt/PowerShell
 
 
