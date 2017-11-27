@@ -7,11 +7,12 @@ import pandas as pd
 from sklearn import svm
 import skimage.io as skiio
 import skvideo.io as skvio
+import matplotlib.pyplot as plt
 from skimage.feature import hog
 from sklearn.utils import shuffle
 from sklearn import preprocessing
 from sklearn.metrics import r2_score
-import matplotlib.pyplot as plt
+from sklearn.model_selection import LeaveOneOut
 
 
 def get_data_ref():
@@ -35,6 +36,34 @@ def get_data_info():
         print ('~' * 90)
         sys.exit('File Not Found ! Directory Does Not Exist ! Re-make Dataset !')
     return dataset
+
+def get_dataset():
+    # A Method to Read the Raw Dataset and Return Dataset As Is
+    # Get Dataset
+    dataset = get_data_info()
+    # Convert to NumPy Array
+    dataset = np.array(dataset)
+    # Convert to List of Lists
+    dataset = dataset.tolist()
+    # Shuffle Dataset To Randomize the Ordered Labels
+    dataset = shuffle(dataset)
+    # Return the DataFrame Splits of Train and Test
+    dataset = pd.DataFrame(dataset, columns=['Action', 'Label'])
+    return dataset
+
+def get_loocv_splits(dataset):
+    # A Method That Returns A List Of Lists Of Train and Test LeaveOneOut Splits
+    dataset = np.array(dataset)
+    # Initialize LOO CV Method
+    loo = LeaveOneOut()
+    loo_data_splits = []
+    for train_index, test_index in loo.split(dataset):
+        train, test = dataset[train_index], dataset[test_index]
+        loo_data_splits.append([train.tolist(), test.tolist()])
+    # Convert NumPy Array to Pandas DataFrame
+    loo_data_splits = pd.DataFrame(loo_data_splits, columns=['Train', 'Test'])
+    # Return LOOCV Splits List
+    return loo_data_splits
 
 def get_dataset_splits():
     # A Method to Read the Raw Dataset and Return Dataset Splits
@@ -95,9 +124,10 @@ def get_video_specs(video_file_name):
     vids_dir = get_data_ref().split('\\')
     vids_dir = os.path.join(vids_dir[0], vids_dir[1])
     video_file = os.path.join(vids_dir, video_file_name)
-    # Normalizing All Video Frame Sizes to h120 x w160
-    h, w = 120, 160
+    # Normalizing All Video Frame Sizes to h120 x w160 [Ratio 3:4]
+    h, w = 90, 120
     dim = str(w) + 'x' + str(h)
+    # Read Video As GrayScale
     video = skvio.vread(video_file, as_grey=True, outputdict={'-sws_flags': 'bilinear', '-s': dim}) # -s : width x height
     frames, height, width, channels = video.shape
     # Normalize Video Frame Intensities
@@ -105,7 +135,7 @@ def get_video_specs(video_file_name):
         for f in range(frames):
             video[f] = normalize_image(video[f])
     # Return Normalized Video and Specs
-    return video, frames, height, width, channels
+    return video, frames, height, width, channels, video_file_name
 
 def get_videos_as_images_with_labels(data_split, split_name):
     # Obtain the Videos as Frames along with Labels
@@ -124,10 +154,10 @@ def get_videos_as_images_with_labels(data_split, split_name):
     tss = time.time()
     frame_spec_label = []
     for vdo in range(len(videos)):
-        images, frames, height, width, channels = get_video_specs(videos[vdo][0])
+        images, frames, height, width, channels, vidname = get_video_specs(videos[vdo][0])
         for img in images:
             image = img.reshape(height, width, channels)
-            frame_spec_label.append([image, height, width, channels, labels_encoded[vdo]])
+            frame_spec_label.append([image, height, width, channels, labels_encoded[vdo], vidname])
     frame_spec_label = np.array(frame_spec_label)
     tes = time.time()
     print ('Time Taken To Get %s Frame_Specs_Label List : %f Mins.' % (split_name, ((tes - tss) / 60.0)))
@@ -155,18 +185,38 @@ def visualize_hog(image, features, hog_image):
     ax1.set_adjustable('box-forced')
     return None
 
-def get_hog_features(images, data_name):
+def get_hog_features(images, labels, vdo_name, data_name):
     # Get a List of all HOG Features for given Video Frames
     hog_feats = []
     tshog = time.time()
-    for img in images:
+    for img in range(len(images)):
         # Get only the HOG Features
-        _, features, _ = get_hog(img)
-        hog_feats.append(features.tolist())
+        _, features, _ = get_hog(images[img])
+        hog_feats.append([features.tolist(), labels[img], vdo_name[img]])
     tehog = time.time()
     print ('Time Taken To Get %s Data HOG Features List : %f Mins.' % (data_name, ((tehog - tshog) / 60.0)))
     # Return the List of HOG Features
     return hog_feats
+
+def get_hog_train_test_splits(loo_splits, hog_data):
+    # A Method to Obtain All Train and Test HOG Features Lists
+    tests = np.array([row['Test'] for index, row in loo_splits.iterrows()]).tolist()
+    hog_data = np.array(hog_data)
+    hog_trains, hog_tests = [], []
+    for test in tests:
+        # Get Video Name Frame Match In HOG Features List
+        hog_test_index = np.where(hog_data[:, 2] == test[0][0])[0].tolist()
+        hog_train_index = np.where(hog_data[:, 2] != test[0][0])[0].tolist()
+        hog_test = []
+        hog_train = []
+        for it in hog_test_index:
+            hog_test.append(hog_data[it].tolist())
+        for itr in hog_train_index:
+            hog_train.append(hog_data[itr].tolist())
+        hog_tests.append(hog_test)
+        hog_trains.append(hog_train)
+    # Return List of HOG Train and Test Lists
+    return hog_trains, hog_tests
 
 def do_svm(kernel, train_data, test_data, train_labels, test_labels):
     # Convert Datset to Numpy Array
@@ -176,7 +226,7 @@ def do_svm(kernel, train_data, test_data, train_labels, test_labels):
     test_labels = np.array([tl for tl in test_labels]).ravel()
     # Kernel Constants
     lin_c = 0.1
-    rbf_c, rbf_gamma = 1.0, 10.0
+    rbf_c, rbf_gamma = 1.0, 'auto'
     sgm_c, sgm_gamma, sgm_coef = 1.0, 1.0, 1.0
     poly_c, poly_deg, poly_gamma, poly_coef = 1.0, 1.0, 1.0, 1.0
     # Perform SVM Classification for Specified Kernel
@@ -196,12 +246,6 @@ def do_svm(kernel, train_data, test_data, train_labels, test_labels):
         print('Time Taken to Predict using the Fitted Model : ' + str(svc_predict) + ' Secs')
         acc_lin = r2_score(test_labels, y_lin) * 100
         print('Test Accuracy Score of the Model : ' + str(acc_lin))
-        # Compare Labels vs. Predictions
-        plt.figure('Linear Kernel SVM ~ SKLearn')
-        plt.plot([x for x in range(0, len(test_labels))], test_labels, 'b.')
-        plt.plot([x for x in range(0, len(test_labels))], y_lin, 'r.')
-        plt.title('Linear Kernel SVM ~ Labels vs. Predictions')
-        plt.legend(['Labels', 'Predictions'])
         test_preds = y_lin
     elif (kernel == 'gaussian'):
         #Gaussian
@@ -220,12 +264,6 @@ def do_svm(kernel, train_data, test_data, train_labels, test_labels):
         print('Time Taken to Predict using the Fitted Model : ' + str(svc_predict) + ' Secs')
         acc_rbf = r2_score(test_labels, y_rbf) * 100
         print('Test Accuracy Score of the Model : ' + str(acc_rbf))
-        # Compare Labels vs. Predictions
-        plt.figure('Gaussian Kernel SVM ~ SKLearn')
-        plt.plot([x for x in range(0, len(test_labels))], test_labels, 'b.')
-        plt.plot([x for x in range(0, len(test_labels))], y_rbf, 'r.')
-        plt.title('Gaussian Kernel SVM ~ Labels vs. Predictions')
-        plt.legend(['Labels', 'Predictions'])
         test_preds = y_rbf
     elif (kernel == 'sigmoid'):
         #Sigmoid
@@ -244,12 +282,6 @@ def do_svm(kernel, train_data, test_data, train_labels, test_labels):
         print('Time Taken to Predict using the Fitted Model : ' + str(svc_predict) + ' Secs')
         acc_sgm = r2_score(test_labels, y_sgm) * 100
         print('Test Accuracy Score of the Model : ' + str(acc_sgm))
-        # Compare Labels vs. Predictions
-        plt.figure('Sigmoid Kernel SVM ~ SKLearn')
-        plt.plot([x for x in range(0, len(test_labels))], test_labels, 'b.')
-        plt.plot([x for x in range(0, len(test_labels))], y_sgm, 'r.')
-        plt.title('Sigmoid Kernel SVM ~ Labels vs. Predictions')
-        plt.legend(['Labels', 'Predictions'])
         test_preds = y_sgm
     elif (kernel == 'poly'):
         #Polynomial
@@ -269,15 +301,42 @@ def do_svm(kernel, train_data, test_data, train_labels, test_labels):
         print('Time Taken to Predict using the Fitted Model : ' + str(svc_predict) + ' Secs')
         acc_poly = r2_score(test_labels, y_poly) * 100
         print('Test Accuracy Score of the Model : ' + str(acc_poly))
-        # Compare Labels vs. Predictions
-        plt.figure('Polynomial Kernel SVM ~ SKLearn')
-        plt.plot([x for x in range(0, len(test_labels))], test_labels, 'b.')
-        plt.plot([x for x in range(0, len(test_labels))], y_poly, 'r.')
-        plt.title('Polynomial Kernel SVM ~ Labels vs. Predictions')
-        plt.legend(['Labels', 'Predictions'])
         test_preds = y_poly
     # Return Test labels and Test Predictions
     return test_labels, test_preds
+
+def get_plots(kernel, labels, predictions):
+    # Plot Labels vs. Predictions
+    if (kernel == 'linear'):
+        # Compare Linear Labels vs. Predictions
+        plt.figure('Linear Kernel SVM ~ SKLearn')
+        plt.plot([x for x in range(0, len(labels))], labels, 'b.')
+        plt.plot([x for x in range(0, len(labels))], predictions, 'r.')
+        plt.title('Linear Kernel SVM ~ Labels vs. Predictions')
+        plt.legend(['Labels', 'Predictions'])
+    elif (kernel == 'gaussian'):
+        # Compare Gaussian Labels vs. Predictions
+        plt.figure('Gaussian Kernel SVM ~ SKLearn')
+        plt.plot([x for x in range(0, len(labels))], labels, 'b.')
+        plt.plot([x for x in range(0, len(labels))], predictions, 'r.')
+        plt.title('Gaussian Kernel SVM ~ Labels vs. Predictions')
+        plt.legend(['Labels', 'Predictions'])
+    elif (kernel == 'sigmoid'):
+        # Compare Sigmoid Labels vs. Predictions
+        plt.figure('Sigmoid Kernel SVM ~ SKLearn')
+        plt.plot([x for x in range(0, len(labels))], labels, 'b.')
+        plt.plot([x for x in range(0, len(labels))], predictions, 'r.')
+        plt.title('Sigmoid Kernel SVM ~ Labels vs. Predictions')
+        plt.legend(['Labels', 'Predictions'])
+    elif (kernel == 'poly'):
+        # Compare Polynomial Labels vs. Predictions
+        plt.figure('Polynomial Kernel SVM ~ SKLearn')
+        plt.plot([x for x in range(0, len(labels))], labels, 'b.')
+        plt.plot([x for x in range(0, len(labels))], predictions, 'r.')
+        plt.title('Polynomial Kernel SVM ~ Labels vs. Predictions')
+        plt.legend(['Labels', 'Predictions'])
+    # Return Nothing
+    return None
 
 def calc_metrics(labels, predictions):
     # Calculate Evaluation Metrics
@@ -295,6 +354,37 @@ def calc_metrics(labels, predictions):
     return sensitivity, specificity
 
 
+def do_hogsvm_loocv():
+    # Function to Execute HOG SVM Program
+    
+    # Get Dataset
+    print ('~' * 90)
+    dataset = get_dataset()
+    print ('~' * 90)
+    
+    # Get LOOCV Splits
+    loo_splits = get_loocv_splits(dataset)
+    
+    # Get Data Splits with Labels
+    fsl_data = get_videos_as_images_with_labels(dataset, 'All') # ~5.00 Mins
+    print ('~' * 90)
+    
+    # Get HOG Features List
+    hog_data = get_hog_features(fsl_data[:, 0], fsl_data[:, 4], fsl_data[:, 5], 'All') # ~10.00 Mins
+    print ('~' * 90)
+    
+    # Get HOG Features Train and Test Splits
+    hog_trains, hog_tests = get_hog_train_test_splits(loo_splits, hog_data)
+    
+    # Perform SVM on HOG Train and Test Splits
+        
+    
+    # Perform SVM on HOG Features using Specified Kernel
+    print ('~' * 90)
+    
+    # Return None
+    return None
+
 def do_hogsvm():
     # Function to Execute HOG SVM Program
     
@@ -309,19 +399,23 @@ def do_hogsvm():
     print ('~' * 90)
     
     # Get HOG Features List
-    hog_train = get_hog_features(fsl_train[:, 0], 'Train') # ~9.00 Mins
-    hog_test = get_hog_features(fsl_test[:, 0], 'Test') # ~1.00 Mins
+    hog_train = get_hog_features(fsl_train[:, 0], fsl_train[:, 4], fsl_train[:, 5], 'Train') # ~9.00 Mins
+    hog_test = get_hog_features(fsl_test[:, 0], fsl_test[:, 4], fsl_test[:, 5], 'Test') # ~1.00 Mins
     print ('~' * 90)
     
     # Perform SVM on HOG Features using Specified Kernel
     lin_labels, lin_preds = do_svm('linear', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
+    get_plots('linear', lin_labels, lin_preds)
     lin_sens, lin_spec = calc_metrics(lin_labels, lin_preds)
-    sgm_labels, sgm_preds = do_svm('sigmoid', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
-    sgm_sens, sgm_spec = calc_metrics(sgm_labels, sgm_preds)
-    poly_labels, poly_preds = do_svm('poly', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
-    poly_sens, poly_spec = calc_metrics(poly_labels, poly_preds)
-    rbf_labels, rbf_preds = do_svm('gaussian', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
-    rbf_sens, rbf_spec = calc_metrics(rbf_labels, rbf_preds)
+#    sgm_labels, sgm_preds = do_svm('sigmoid', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
+#    get_plots('sigmoid', sgm_labels, sgm_preds)
+#    sgm_sens, sgm_spec = calc_metrics(sgm_labels, sgm_preds)
+#    poly_labels, poly_preds = do_svm('poly', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
+#    get_plots('poly', poly_labels, poly_preds)
+#    poly_sens, poly_spec = calc_metrics(poly_labels, poly_preds)
+#    rbf_labels, rbf_preds = do_svm('gaussian', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
+#    get_plots('gaussian', rbf_labels, rbf_preds)
+#    rbf_sens, rbf_spec = calc_metrics(rbf_labels, rbf_preds)
     print ('~' * 90)
     
     # Return None

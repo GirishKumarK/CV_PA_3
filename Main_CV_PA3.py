@@ -21,7 +21,7 @@ from collect_videos import collect_videos
 from delete_videos import delete_videos
 
 from cv_pa3_CNN import do_cnn
-from cv_pa3_HOG_SVM import do_hogsvm
+from cv_pa3_HOG_SVM import do_hogsvm_loocv
 
 def first_run():
     # Create the Datasets for First Run
@@ -53,7 +53,7 @@ program = input('Choose Program to Execute : \n 1. HOG~SVM [SciKit] \n 2. CNN [T
 if (program == '1'):
     print ('~' * 100)
     print ('Executing HOG~SVM Program ...')
-    do_hogsvm()
+    do_hogsvm_loocv()
     print ('Program Execution Complete !')
     print ('~' * 100)
 elif (program == '2'):
