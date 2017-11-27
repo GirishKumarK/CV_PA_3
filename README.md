@@ -1,6 +1,6 @@
 # Computer Vision ~ Programming Assignment ~ 3
 
-# STOP HERE ~ READ ME FIRST ~ INCOMPLETE
+# STOP HERE ~ READ ME FIRST ~ ALMOST COMPLETE ...
 
 Files will be uploaded and will be kept updated as soon as possible.
 
