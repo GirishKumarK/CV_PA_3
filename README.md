@@ -5,7 +5,7 @@ Originally done using Python 3.5.
 
 Program Requirements : Python 3.5 (only), NumPy, Pandas, SciKit-Learn, SciKit-Image, SciKit-Video, MatPlotLib and TensorFlow
 
-Before Running Program : UCF Sports Dataset Must be in the Same Folder as all my Python Files are located, else WILL NOT WORK.
+Before Running Program : UCF Sports Dataset MUST be in the Same Folder as all my Python Files are located, else WILL NOT WORK.
 
 Just Execute Main_CV_PA3.py in Spyder/Anaconda ~ Not In Terminal/CommandPrompt/PowerShell
 
