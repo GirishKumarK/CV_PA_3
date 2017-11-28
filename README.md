@@ -9,6 +9,8 @@ Program Requirements : Python 3.5 (only), NumPy, Pandas, SciKit-Learn, SciKit-Im
 Just Execute Main_CV_PA3.py in Spyder/Anaconda ~ Not In Terminal/CommandPrompt/PowerShell
 
 
+http://vision.stanford.edu/teaching/cs231b_spring1415/slides/alexnet_tugce_kyunghee.pdf
+
 Computer Vision ~ Programming Assignment ~ 1 : https://github.com/GirishKumarK/CV_PA_1
 
 Computer Vision ~ Programming Assignment ~ 2 : https://github.com/GirishKumarK/CV_PA_2
