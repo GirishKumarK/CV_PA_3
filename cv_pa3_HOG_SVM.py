@@ -200,6 +200,7 @@ def get_hog_features(images, labels, vdo_name, data_name):
 
 def get_hog_train_test_splits(loo_splits, hog_data):
     # A Method to Obtain All Train and Test HOG Features Lists
+    tshs = time.time()
     tests = np.array([row['Test'] for index, row in loo_splits.iterrows()]).tolist()
     hog_data = np.array(hog_data)
     hog_trains, hog_tests = [], []
@@ -215,17 +216,43 @@ def get_hog_train_test_splits(loo_splits, hog_data):
             hog_train.append(hog_data[itr].tolist())
         hog_tests.append(hog_test)
         hog_trains.append(hog_train)
+    tehs = time.time()
+    print ('Time Taken To Get Train and Test HOG Features Splits : %f Secs.' % (tehs - tshs))
     # Return List of HOG Train and Test Lists
     return hog_trains, hog_tests
 
-def do_svm(kernel, train_data, test_data, train_labels, test_labels):
+def flatten_hog_splits(hog_train, hog_test):
+    # A Method To Flatten HOG Train and Test Features Lists
+    # Trains
+    hog_train_flat = []
+    for video in hog_train:
+        feats = video[0]
+        label = video[1]
+        hog_train_flat.append([feats, label])
+    # Tests
+    hog_test_flat = []
+    for video in hog_test:
+        feats = video[0]
+        label = video[1]
+        hog_test_flat.append([feats, label])
+    # Convert To Pandas DataFrame
+    hog_train_flat = pd.DataFrame(hog_train_flat, columns=['Feature', 'Label'])
+    hog_test_flat = pd.DataFrame(hog_test_flat, columns=['Feature', 'Label'])
+    # Get the List of Train and Test Frame Features
+    train_feats = np.array([row['Feature'] for index, row in hog_train_flat.iterrows()])
+    test_feats = np.array([row['Feature'] for index, row in hog_test_flat.iterrows()])
+    # Get the List of Labels of Train and Test Frames
+    train_labels = np.array([row['Label'] for index, row in hog_train_flat.iterrows()]).ravel()
+    test_labels = np.array([row['Label'] for index, row in hog_test_flat.iterrows()]).ravel()
+    # Return Flattened HOG Train and Test Features List
+    return train_feats, test_feats, train_labels, test_labels
+
+def do_svm_train(kernel, train_data, train_labels):
     # Convert Datset to Numpy Array
     train_data = np.array(train_data)
-    test_data = np.array(test_data)
     train_labels = np.array([trl for trl in train_labels]).ravel()
-    test_labels = np.array([tl for tl in test_labels]).ravel()
     # Kernel Constants
-    lin_c = 0.1
+    lin_c = 1.0
     rbf_c, rbf_gamma = 1.0, 'auto'
     sgm_c, sgm_gamma, sgm_coef = 1.0, 1.0, 1.0
     poly_c, poly_deg, poly_gamma, poly_coef = 1.0, 1.0, 1.0, 1.0
@@ -239,14 +266,7 @@ def do_svm(kernel, train_data, test_data, train_labels, test_labels):
         fit_lin = svc_lin.fit(train_data, train_labels)
         svc_fit = time.time() - t
         print('Time Taken to Fit the Model : ' + str(svc_fit) + ' Secs')
-        # Test
-        t = time.time()
-        y_lin = svc_lin.predict(test_data)
-        svc_predict = time.time() - t
-        print('Time Taken to Predict using the Fitted Model : ' + str(svc_predict) + ' Secs')
-        acc_lin = r2_score(test_labels, y_lin) * 100
-        print('Test Accuracy Score of the Model : ' + str(acc_lin))
-        test_preds = y_lin
+        kernel_fit = svc_lin
     elif (kernel == 'gaussian'):
         #Gaussian
         print('\nGaussian Kernel with Hyperparameters : C = ' + str(rbf_c) + 
@@ -257,14 +277,7 @@ def do_svm(kernel, train_data, test_data, train_labels, test_labels):
         fit_rbf = svc_rbf.fit(train_data, train_labels)
         svc_fit = time.time() - t
         print('Time Taken to Fit the Model : ' + str(svc_fit) + ' Secs')
-        # Test
-        t = time.time()
-        y_rbf = svc_rbf.predict(test_data)
-        svc_predict = time.time() - t
-        print('Time Taken to Predict using the Fitted Model : ' + str(svc_predict) + ' Secs')
-        acc_rbf = r2_score(test_labels, y_rbf) * 100
-        print('Test Accuracy Score of the Model : ' + str(acc_rbf))
-        test_preds = y_rbf
+        kernel_fit = svc_rbf
     elif (kernel == 'sigmoid'):
         #Sigmoid
         print('\nSigmoid Kernel with Hyperparameters : C = ' + str(sgm_c) + 
@@ -275,14 +288,7 @@ def do_svm(kernel, train_data, test_data, train_labels, test_labels):
         fit_sgm = svc_sgm.fit(train_data, train_labels)
         svc_fit = time.time() - t
         print('Time Taken to Fit the Model : ' + str(svc_fit) + ' Secs')
-        # Test
-        t = time.time()
-        y_sgm = svc_sgm.predict(test_data)
-        svc_predict = time.time() - t
-        print('Time Taken to Predict using the Fitted Model : ' + str(svc_predict) + ' Secs')
-        acc_sgm = r2_score(test_labels, y_sgm) * 100
-        print('Test Accuracy Score of the Model : ' + str(acc_sgm))
-        test_preds = y_sgm
+        kernel_fit = svc_sgm
     elif (kernel == 'poly'):
         #Polynomial
         print('\nPolynomial Kernel with Hyperparameters : C = ' + str(poly_c) + 
@@ -294,16 +300,25 @@ def do_svm(kernel, train_data, test_data, train_labels, test_labels):
         fit_poly = svc_poly.fit(train_data, train_labels)
         svc_fit = time.time() - t
         print('Time Taken to Fit the Model : ' + str(svc_fit) + ' Secs')
-        # Test
-        t = time.time()
-        y_poly = svc_poly.predict(test_data)
-        svc_predict = time.time() - t
-        print('Time Taken to Predict using the Fitted Model : ' + str(svc_predict) + ' Secs')
-        acc_poly = r2_score(test_labels, y_poly) * 100
-        print('Test Accuracy Score of the Model : ' + str(acc_poly))
-        test_preds = y_poly
-    # Return Test labels and Test Predictions
-    return test_labels, test_preds
+        kernel_fit = svc_poly
+    # Return SVM Kernel Fit Models
+    return kernel_fit
+
+def do_svm_test(kernel_fit, test_data, test_labels):
+    # Perform SVM Predictions for Specified Kernel
+    # Convert Datset to Numpy Array
+    test_data = np.array(test_data)
+    test_labels = np.array([tl for tl in test_labels]).ravel()
+    # Test
+    t = time.time()
+    test_preds = kernel_fit.predict(test_data)
+    svc_predict = time.time() - t
+    print('Time Taken to Predict using the Fitted Model : ' + str(svc_predict) + ' Secs')
+    accuracy = r2_score(test_labels, test_preds) * 100
+    print('Test Accuracy Score of the Model : ' + str(accuracy))
+    # Return Test Predictions
+    return test_preds, accuracy
+    
 
 def get_plots(kernel, labels, predictions):
     # Plot Labels vs. Predictions
@@ -340,7 +355,7 @@ def get_plots(kernel, labels, predictions):
 
 def calc_metrics(labels, predictions):
     # Calculate Evaluation Metrics
-    true, false = 0, 0
+    true, false = 0.0, 0.0
     for l in range(len(labels)):
         if (labels[l] == predictions[l]):
             true += 1
@@ -364,22 +379,63 @@ def do_hogsvm_loocv():
     
     # Get LOOCV Splits
     loo_splits = get_loocv_splits(dataset)
+    loo_length = loo_splits.shape[0]
     
     # Get Data Splits with Labels
     fsl_data = get_videos_as_images_with_labels(dataset, 'All') # ~5.00 Mins
     print ('~' * 90)
     
     # Get HOG Features List
-    hog_data = get_hog_features(fsl_data[:, 0], fsl_data[:, 4], fsl_data[:, 5], 'All') # ~10.00 Mins
+    hog_data = get_hog_features(fsl_data[:, 0], fsl_data[:, 4], fsl_data[:, 5], 'All') # ~12.00 Mins
     print ('~' * 90)
     
     # Get HOG Features Train and Test Splits
-    hog_trains, hog_tests = get_hog_train_test_splits(loo_splits, hog_data)
+    hog_trains, hog_tests = get_hog_train_test_splits(loo_splits, hog_data) # ~30.00 Secs
+    print ('~' * 90)
     
-    # Perform SVM on HOG Train and Test Splits
-        
-    
-    # Perform SVM on HOG Features using Specified Kernel
+    # Perform SVM on HOG Train and Test Features Splits using Specified Kernel
+    accs, senss, specs = [], [], []
+    for epoch in range(loo_length): # loo_length
+        print ('Epoch : ' + str(epoch + 1))
+        # Get Flattened Train and Test Features and Labels
+        train_feats, test_feats, train_labels, test_labels = flatten_hog_splits(hog_trains[epoch], hog_tests[epoch])
+        # Perform SVM on HOG Features using Specified Kernel
+        # Linear
+        lin_fit = do_svm_train('linear', train_feats, train_labels)
+        lin_preds, lin_acc = do_svm_test(lin_fit, test_feats, test_labels)
+#        get_plots('linear', test_labels, lin_preds)
+        lin_sens, lin_spec = calc_metrics(test_labels, lin_preds)
+        accs.append(lin_acc)
+        senss.append(lin_sens)
+        specs.append(lin_spec)
+#        # Sigmoid
+#        sgm_fit = do_svm_train('sigmoid', train_feats, train_labels)
+#        sgm_preds, sgm_acc = do_svm_test(sgm_fit, test_feats, test_labels)
+#        get_plots('sigmoid', test_labels, sgm_preds)
+#        sgm_sens, sgm_spec = calc_metrics(test_labels, sgm_preds)
+#        accs.append(sgm_acc)
+#        senss.append(sgm_sens)
+#        specs.append(sgm_spec)
+#        # Polynomial
+#        poly_fit = do_svm_train('poly', train_feats, train_labels)
+#        poly_preds, poly_acc = do_svm_test(poly_fit, test_feats, test_labels)
+#        get_plots('poly', test_labels, poly_preds)
+#        poly_sens, poly_spec = calc_metrics(test_labels, poly_preds)
+#        accs.append(poly_acc)
+#        senss.append(poly_sens)
+#        specs.append(poly_spec)
+#        # Gaussian
+#        rbf_fit = do_svm_train('gaussian', train_feats, train_labels)
+#        rbf_preds, rbf_acc = do_svm_test(rbf_fit, test_feats, test_labels)
+#        get_plots('gaussian', test_labels, rbf_preds)
+#        rbf_sens, rbf_spec = calc_metrics(test_labels, rbf_preds)
+#        accs.append(rbf_acc)
+#        senss.append(rbf_sens)
+#        specs.append(rbf_spec)
+    avg_acc = sum(accs) / len(accs)
+    avg_sens = sum(senss) / len(senss)
+    avg_spec = sum(specs) / len(specs)
+    print ('Average Accuracy : %f ::: Average Sensitivity : %f ::: Average Specificity :%f' % (avg_acc, avg_sens, avg_spec))
     print ('~' * 90)
     
     # Return None
@@ -404,19 +460,27 @@ def do_hogsvm():
     print ('~' * 90)
     
     # Perform SVM on HOG Features using Specified Kernel
-    lin_labels, lin_preds = do_svm('linear', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
-    get_plots('linear', lin_labels, lin_preds)
-    lin_sens, lin_spec = calc_metrics(lin_labels, lin_preds)
-#    sgm_labels, sgm_preds = do_svm('sigmoid', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
-#    get_plots('sigmoid', sgm_labels, sgm_preds)
-#    sgm_sens, sgm_spec = calc_metrics(sgm_labels, sgm_preds)
-#    poly_labels, poly_preds = do_svm('poly', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
-#    get_plots('poly', poly_labels, poly_preds)
-#    poly_sens, poly_spec = calc_metrics(poly_labels, poly_preds)
-#    rbf_labels, rbf_preds = do_svm('gaussian', hog_train, hog_test, fsl_train[:, 4], fsl_test[:, 4])
-#    get_plots('gaussian', rbf_labels, rbf_preds)
-#    rbf_sens, rbf_spec = calc_metrics(rbf_labels, rbf_preds)
-    print ('~' * 90)
+    # Linear
+    lin_fit = do_svm_train('linear', hog_train, fsl_train[:, 4])
+    lin_preds, lin_acc = do_svm_test(lin_fit, hog_test, fsl_test[:, 4])
+    get_plots('linear', fsl_test[:, 4], lin_preds)
+    lin_sens, lin_spec = calc_metrics(fsl_test[:, 4], lin_preds)
+#    # Sigmoid
+#    sgm_fit = do_svm_train('sigmoid', hog_train, fsl_train[:, 4])
+#    sgm_preds, sgm_acc = do_svm_test(sgm_fit, hog_test, fsl_test[:, 4])
+#    get_plots('sigmoid', fsl_test[:, 4], lin_preds)
+#    sgm_sens, sgm_spec = calc_metrics(fsl_test[:, 4], sgm_preds)
+#    # Polynomial
+#    poly_fit = do_svm_train('poly', hog_train, fsl_train[:, 4])
+#    poly_preds, poly_acc = do_svm_test(poly_fit, hog_test, fsl_test[:, 4])
+#    get_plots('poly', fsl_test[:, 4], poly_preds)
+#    poly_sens, poly_spec = calc_metrics(fsl_test[:, 4], poly_preds)
+#    # Gaussian
+#    rbf_fit = do_svm_train('gaussian', hog_train, fsl_train[:, 4])
+#    rbf_preds, rbf_acc = do_svm_test(rbf_fit, hog_test, fsl_test[:, 4])
+#    get_plots('gaussian', fsl_test[:, 4], rbf_preds)
+#    rbf_sens, rbf_spec = calc_metrics(fsl_test[:, 4], rbf_preds)
+#    print ('~' * 90)
     
     # Return None
     return None

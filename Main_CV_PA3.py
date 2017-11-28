@@ -21,7 +21,8 @@ from collect_videos import collect_videos
 from delete_videos import delete_videos
 
 from cv_pa3_CNN import do_cnn
-from cv_pa3_HOG_SVM import do_hogsvm_loocv
+from cv_pa3_HOG_SVM import do_hogsvm_loocv, do_hogsvm
+
 
 def first_run():
     # Create the Datasets for First Run
@@ -33,10 +34,15 @@ def first_run():
     return None
 
 print ('~' * 110)
-print ('Attention : \n Program Requirements : NumPy, Pandas, SciKit-Learn, SciKit-Image, SciKit-Video, MatPlotLib and TensorFlow')
+print ('ATTENTION : \n Program Requirements : NumPy, Pandas, SciKit-Learn,' 
+       + ' SciKit-Image, SciKit-Video, MatPlotLib and TensorFlow')
+print ('~' * 110)
+print ('WARNING : \n DO NOT RUN THE PROGRAM UNLESS YOU REALLY WANT TO : ' 
+       + 'TAKES MINIMUM 5 HOURS TO COMPLETE !!!')
 print ('~' * 110)
 
-firstrun = input('Are You Executing This Program For The First Time On This Computer ? : \n [Y] Yes \n [N] No \n Enter Character : ')
+firstrun = input('Are You Executing This Program For The First Time On This Computer ? : \n ' 
+                 + '[Y] Yes \n [N] No \n Enter Character : ')
 if ((firstrun == 'Y') or (firstrun == 'y')):
     print ('~' * 100)
     print ('Creating Datasets ...')
@@ -49,14 +55,24 @@ elif ((firstrun == 'N') or (firstrun == 'n')):
 else:
     sys.exit('Wrong Choice ! Re-Execute Program !')
 
-program = input('Choose Program to Execute : \n 1. HOG~SVM [SciKit] \n 2. CNN [TensorFlow] \n Enter Number : ')
+program = input('Choose Program to Execute : \n ' + 
+                '1. HOG~SVM with LOO-CV [SciKit-Learn] \n ' + 
+                '2. HOG~SVM without LOO-CV [SciKit-Learn] \n ' + 
+                '3. CNN [TensorFlow] \n ' + 
+                'Enter Number : ')
 if (program == '1'):
     print ('~' * 100)
-    print ('Executing HOG~SVM Program ...')
+    print ('Executing HOG~SVM with LOO-CV Program ...')
     do_hogsvm_loocv()
     print ('Program Execution Complete !')
     print ('~' * 100)
 elif (program == '2'):
+    print ('~' * 100)
+    print ('Executing HOG~SVM without LOO-CV Program ...')
+    do_hogsvm()
+    print ('Program Execution Complete !')
+    print ('~' * 100)
+elif (program == '3'):
     print ('~' * 100)
     print ('Executing CNN Program ...')
     do_cnn()
@@ -67,7 +83,9 @@ else:
     print ('Wrong Choice ! Re-Execute Program !')
     print ('~' * 100)
 
-destroy = input('Please Destroy Dataset Directory Once Complete ! \n [Y] Destroy \n [N] Do Not Destroy \n Enter Character : ')
+destroy = input('Please Destroy Dataset Directory Once Complete ! \n ' + 
+                '[Y] Destroy \n [N] Do Not Destroy \n ' + 
+                'Enter Character : ')
 if ((destroy == 'Y') or (destroy == 'y')):
     print ('~' * 100)
     print ('Dataset Directory Destroyed ! Please Re-Create In The Next Run !')
